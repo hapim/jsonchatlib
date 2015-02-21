@@ -22,7 +22,9 @@ var _ = require('underscore');
  *   - args (required) - arguments (positional or named) 
  *   - src  (optional) - 
  *   - dst  (optional) - defaults to current channel, could be a channel or list of channels
- *   - tags (required) - result values (positional or named) 
+ *   - tags (optional) - on response - result values (positional or named) 
+ *   - error - on response {'code': ERROR_CODE, message: 'error message(optional)'}, 
+ *             args would carry the result error string
  *
  * publish/notification:
  * 
@@ -30,23 +32,25 @@ var _ = require('underscore');
  * --> {"cmd": "pub", "args": "Hi, there"}
  * --> {"ver": "1.0", "cmd": "pub", "args": "Hi, there"}
  * 
+ * error response:
+ * <-- {"ver": "1.0", "error": {"code":-32600,"message":"Parse error"}}
+ * <-- {"error": {"code":-32600},"args":"Unexpected end of input"}
+ *
 */
 
-// Keep the same code as JsonRpc error codes
+// Keep the similar code to HTTP
+// anything starting with 5xx - basic fundamental issue 
+// anything with 4xx - application specific, soft issues 
 var ChatErrors = {
-  PARSE_ERROR     : { code:-32700, message: 'Parse error' },
-  INVALID_REQUEST : { code:-32600, message: 'Invalid Request' },
-  METHOD_NOT_FOUND: { code:-32601, message: 'Method not found' },
-  INVALID_PARAMS  : { code:-32602, message: 'Invalid params' },
-  INTERNAL_ERROR  : { code:-32603, message: 'Internal error' },
-  SERVER_ERROR    : { code:-32000, message: 'Server error' }
+  INTERNAL_ERROR  : { code:500, message: 'Internal error' },
+  PARSE_ERROR     : { code:510, message: 'Parse error' }
 };
-
 
 // JSON chat library entry point
 // 'module' implements all the extensions, by default only 'pub' is supported
-var JSONChat = function(module, debug) {
+var JSONChat = function(module, minimal, debug) {
   this.debug = debug || false;
+  this.minimal = minimal || false;
   this.version = "1.0";
   // check & load the methods in module
   this.commands = module;
@@ -64,7 +68,7 @@ JSONChat.prototype.dispatch = function(jsonBody) {
   var self=this;
   self._debug(true, jsonBody);
 
-  var id = null;
+  var id;
   var batch = false;
   var cmdObj;
   // first step is to parse the json
@@ -80,14 +84,14 @@ JSONChat.prototype.dispatch = function(jsonBody) {
 // return back the correct error object
 JSONChat.prototype.error = function(err, id, data) {
   var errorObj = { 
-      ver: this.version,
-      error: { code: err.code, message: err.message }
+      id: id,
+      error: { code: err.code },
+      args: data
   };
-  if(id) {
-      errorObj['id']=id;
-  };
-  if(data) {
-    errorObj['data'] = data;
+  // include error message only if minimal not set
+  if(!this.minimal) {
+      errorObj['ver'] = this.version;
+      errorObj['error']['message'] = err.message;
   }
   this._debug(false, errorObj);
   return errorObj;
