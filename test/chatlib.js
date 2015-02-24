@@ -14,6 +14,7 @@ function _getCodeOrResult(jsonStr, code) {
 }
 
 var PARSE_ERROR = 510;
+var INVALID_REQUEST = 511;
 
 var ChatServer = {
     greet: function() { return "Hi! there"; },
@@ -33,6 +34,38 @@ describe('json-chat library', function() {
       var res;
       res=chat.dispatch('{"args": "hello, there"');
       assert.equal(_getCodeOrResult(res), PARSE_ERROR);
+
+      res=chat.dispatch('[]');
+      assert.equal(_getCodeOrResult(res), INVALID_REQUEST);
+
+      res=chat.dispatch('[[]]');
+      var obj = JSON.parse(res);
+      assert.equal(obj.length, 1);
+      assert.equal(obj[0].error.code, INVALID_REQUEST);
+
+      res=chat.dispatch('{}');
+      assert.equal(_getCodeOrResult(res), INVALID_REQUEST);
+
+      res=chat.dispatch('{"xyz":"useless param"}');
+      assert.equal(_getCodeOrResult(res), INVALID_REQUEST);
+
+      res=chat.dispatch('{"ver":2.0, "args":"sample"}');
+      assert.equal(_getCodeOrResult(res), INVALID_REQUEST);
+
+      done();
+    });
+    it('publish commands', function(done) {
+      var chat=new jsonchatlib(ChatServer,minimal, debug);
+      var res;
+      res=chat.dispatch('{"args": "hello, there"}');
+      assert.equal(_getCodeOrResult(res), undefined);
+
+      res=chat.dispatch('{"cmd":"pub"}');
+      assert.equal(_getCodeOrResult(res), INVALID_REQUEST);
+
+      res=chat.dispatch('{"ver":1, "args":"sample"}');
+      assert.equal(_getCodeOrResult(res), undefined);
+
       done();
     });
   });
