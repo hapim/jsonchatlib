@@ -42,9 +42,11 @@ var _ = require('underscore');
 // anything starting with 5xx - basic fundamental issue 
 // anything with 4xx - application specific, soft issues 
 var ChatErrors = {
-  INTERNAL_ERROR  : { code:500, message: 'Internal error' },
-  PARSE_ERROR     : { code:510, message: 'Parse error' },
-  INVALID_REQUEST : { code:511, message: 'Invalid Request' },
+  INTERNAL_ERROR   : { code:500, message: 'Internal error' },
+  PARSE_ERROR      : { code:510, message: 'Parse error' },
+  INVALID_REQUEST  : { code:511, message: 'Invalid request' },
+  CMD_NOT_FOUND    : { code:520, message: 'Command not found' },
+  INVALID_PARAMS   : { code:521, message: 'Invalid params' },
 };
 
 var _TAG_ID   = 'id';
@@ -110,12 +112,11 @@ JSONChat.prototype.dispatch = function(jsonBody) {
         // invoke the function
         // @todo - what should be the value of 'this'?
         try {
-          var res=self.methods[cmdObj.method].apply(null, cmdObj.params);
-          console.log(res);
-          //result = self.result(reqObj.id, res);
+          var res = self.commands[cmdObj[_TAG_CMD]].apply(null, cmdObj[_TAG_ARGS]);
+          result = self.result(cmdObj.id, res);
         }
         catch(err) {
-          result = self.error(ChatErrors.INTERNAL_ERROR, reqObj.id, err);
+          result = self.error(ChatErrors.INTERNAL_ERROR, cmdObj.id, err);
         }
       }
     }
@@ -130,6 +131,19 @@ JSONChat.prototype.dispatch = function(jsonBody) {
 
 };
 
+// return back the result object
+JSONChat.prototype.result = function(id, result) {
+  var res = { 
+      args : result,
+      id: id 
+  };
+  if(!this.minimal) {
+      res[_TAG_VER] = this.version;
+  }
+  this._debug(false, res);
+  return res;
+};
+
 // return back the correct error object
 JSONChat.prototype.error = function(err, id, data) {
   var errorObj = { 
@@ -139,7 +153,7 @@ JSONChat.prototype.error = function(err, id, data) {
   };
   // include error message only if minimal not set
   if(!this.minimal) {
-      errorObj['ver'] = this.version;
+      errorObj[_TAG_VER] = this.version;
       errorObj['error']['message'] = err.message;
   }
   this._debug(false, errorObj);
@@ -161,38 +175,42 @@ JSONChat.prototype._validate = function(cmdObj) {
   if(_.size(cmdObj)<=0) {
     return self.error(ChatErrors.INVALID_REQUEST, id, 'empty object');
   } 
+
   id = _.has(cmdObj, _TAG_ID)?cmdObj.id:id;
   if(!_.has(cmdObj, _TAG_ARGS)) {
     return self.error(ChatErrors.INVALID_REQUEST, id, 'args missing');
   }
+
   // - check for version
   if(_.has(cmdObj, _TAG_VER) && cmdObj[_TAG_VER]!=_VAL_VER) {
     return self.error(ChatErrors.INVALID_REQUEST, id, 'unknown version');
   }
 
-  return;
-  /*
   // - check for id
-  var idType = handy.getType(cmdObj.id);
-  if(idType != 'string' && idType != 'number') {
-    return self.error(ChatErrors.INVALID_REQUEST, cmdObj.id, 'id should be a valid number/string');
+  if(id) {
+    var idType = handy.getType(cmdObj.id);
+    if(idType != 'string' && idType != 'number') {
+      return self.error(ChatErrors.INVALID_REQUEST, cmdObj.id, 'id should be a valid number/string');
+    }
   }
-  // - check for method
-  if(!_.has(cmdObj, 'method')) {
-    return self.error(ChatErrors.INVALID_REQUEST, cmdObj.id, 'missing method to call');
+  // - check for cmd absence
+  if(!_.has(cmdObj, _TAG_CMD)) {
+    return; // default to cmd='pub'
   }
-  // - check if method is present
-  var fns = _.functions(self.methods);
-  if(!_.include(fns, cmdObj.method)) {
-    return self.error(ChatErrors.METHOD_NOT_FOUND, cmdtObj.id, cmdObj.method + " - unknown method");
+  // - check if cmd is present
+  var fns = _.functions(self.commands);
+  if(!_.include(fns, cmdObj[_TAG_CMD])) {
+    return self.error(ChatErrors.CMD_NOT_FOUND, id, cmdObj[_TAG_CMD] + " - unknown method");
+  }
+  // - args checks
+  var params=_getParamNames(self.commands[cmdObj[_TAG_CMD]]) || [];
+  // - check params length
+  if(_.size(cmdObj[_TAG_ARGS]) != params.length) {
+    return self.error(ChatErrors.INVALID_PARAMS, id, 'params expected:'+params);
   }
 
-  // - parameter checks
-  var params=_getParamNames(self.methods[cmdObj.method]) || [];
-  // - if params are absent and required for the method, its an error
-  if(!_.has(cmdtObj,'params') && params && params.length>0) {
-    return self.error(ChatErrors.INVALID_PARAMS, cmdObj.id, 'params expected:'+params);
-  }
+/*
+
   // - if params are present
   //   it has to be either array or object
   if(_.has(cmdObj, 'params')) {

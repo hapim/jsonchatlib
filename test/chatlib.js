@@ -15,9 +15,12 @@ function _getCodeOrResult(jsonStr, code) {
 
 var PARSE_ERROR = 510;
 var INVALID_REQUEST = 511;
+var UNKNOWN_METHOD = 520;
+var INVALID_PARAMS = 521;
 
 var ChatServer = {
     greet: function() { return "Hi! there"; },
+    say: function(msg) { return msg; },
     name: 'My Chat Machine'
 };
 
@@ -65,6 +68,18 @@ describe('json-chat library', function() {
 
       res=chat.dispatch('{"ver":1, "args":"sample"}');
       assert.equal(_getCodeOrResult(res), undefined);
+
+      res=chat.dispatch('{"cmd":"greet", "args":{}}');
+      assert.equal(_getCodeOrResult(res), "Hi! there");
+
+      res=chat.dispatch('{"cmd":"gree", "args":{}}');
+      assert.equal(_getCodeOrResult(res), UNKNOWN_METHOD);
+
+      res=chat.dispatch('{"cmd":"say", "args":{}}');
+      assert.equal(_getCodeOrResult(res), INVALID_PARAMS);
+
+      res=chat.dispatch('{"cmd":"greet", "args":"hello there"}');
+      assert.equal(_getCodeOrResult(res), INVALID_PARAMS);
 
       done();
     });
