@@ -86,14 +86,14 @@ JSONChat.prototype.dispatch = function(jsonBody) {
   try {
     cmdObj = JSON.parse(jsonBody);
   } catch(err) {
-    return JSON.stringify(self.error(ChatErrors.PARSE_ERROR, id, err.message));
+    return self.error(ChatErrors.PARSE_ERROR, id, err.message);
   }
   var commands = [];
   var results = [];
   // if cmdObj is array, then its a batch request
   if(handy.getType(cmdObj)=='array') {
     if(cmdObj.length==0) {
-      return JSON.stringify(self.error(ChatErrors.INVALID_REQUEST, id, 'empty list'));
+      return self.error(ChatErrors.INVALID_REQUEST, id, 'empty list');
     }
     batch = true;
     commands = cmdObj;
@@ -107,10 +107,11 @@ JSONChat.prototype.dispatch = function(jsonBody) {
       if(!_.has(cmdObj, _TAG_CMD || !_.has(cmdObj, _TAG_ID) || (_.has(cmdObj, _TAG_CMD) && cmdObj[_TAG_CMD]==_PUB_CMD))) {
         // - first handle all pub commands 
         //   those are notifications.
-        self._debug(true, 'Notification ' + JSON.stringify(cmdObj));
+        //self._debug(true, 'Notification ' + JSON.stringify(cmdObj));
+	// - just leave them as they are
+	result = self.result(id, cmdObj[_TAG_ARGS]);
       } else {
         // invoke the function
-        // @todo - what should be the value of 'this'?
         try {
           var res = self.commands[cmdObj[_TAG_CMD]].apply(null, cmdObj[_TAG_ARGS]);
           result = self.result(cmdObj.id, res);
@@ -125,9 +126,9 @@ JSONChat.prototype.dispatch = function(jsonBody) {
   // return back the result
   if(results.length<=0) return;
   if(batch==false) {
-    return JSON.stringify(results[0]);
+    return results[0];
   } 
-  return JSON.stringify(results);
+  return results;
 
 };
 
@@ -177,9 +178,6 @@ JSONChat.prototype._validate = function(cmdObj) {
   } 
 
   id = _.has(cmdObj, _TAG_ID)?cmdObj.id:id;
-  if(!_.has(cmdObj, _TAG_ARGS)) {
-    return self.error(ChatErrors.INVALID_REQUEST, id, 'args missing');
-  }
 
   // - check for version
   if(_.has(cmdObj, _TAG_VER) && cmdObj[_TAG_VER]!=_VAL_VER) {
@@ -195,6 +193,9 @@ JSONChat.prototype._validate = function(cmdObj) {
   }
   // - check for cmd absence
   if(!_.has(cmdObj, _TAG_CMD)) {
+    if(!_.has(cmdObj, _TAG_ARGS)) {
+      return self.error(ChatErrors.INVALID_REQUEST, id, 'args missing');
+    }
     return; // default to cmd='pub'
   }
   // - check if cmd is present
@@ -205,16 +206,14 @@ JSONChat.prototype._validate = function(cmdObj) {
   // - args checks
   var params=_getParamNames(self.commands[cmdObj[_TAG_CMD]]) || [];
   // - check params length
-  if(_.size(cmdObj[_TAG_ARGS]) != params.length) {
+  if(!_.has(cmdObj, _TAG_ARGS) && params && params.length) {
     return self.error(ChatErrors.INVALID_PARAMS, id, 'params expected:'+params);
   }
 
-/*
-
   // - if params are present
   //   it has to be either array or object
-  if(_.has(cmdObj, 'params')) {
-    var ptype = handy.getType(cmdObj.params);
+  if(_.has(cmdObj, _TAG_ARGS)) {
+    var ptype = handy.getType(cmdObj[_TAG_ARGS]);
     if(ptype!='array' && ptype!='object') {
       return self.error(ChatErrors.INVALID_PARAMS, cmdObj.id, 'params should be either array or object');
     }
@@ -223,21 +222,20 @@ JSONChat.prototype._validate = function(cmdObj) {
     // sometimes it might be by design that less valus can be passed
 
     // check if array matches the arguments
-    if(ptype=='array' && cmdObj.params.length != params.length) {
+    if(ptype=='array' && cmdObj[_TAG_ARGS].length != params.length) {
       return self.error(ChatErrors.INVALID_PARAMS, cmdObj.id, 'total params expected:'+params.length);
     }
     // check if the object has matching params
     if(ptype=='object') {
-      var requestValues = _.keys(cmdObj.params);
+      var requestValues = _.keys(cmdObj[_TAG_ARGS]);
       if(!handy.isArrayEqual(params, requestValues)) {
         return self.error(ChatErrors.INVALID_PARAMS, cmdObj.id, 'params expected:'+params);
       }
       // lets convert the params to array 
       // in the order expected
-      cmdObj.params = _.values(_.pick(cmdObj.params, params));
+      cmdObj[_TAG_ARGS] = _.values(_.pick(cmdObj[_TAG_ARGS], params));
     }
   }
-  */
 };
 
 // returns the function parameters
