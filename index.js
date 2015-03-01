@@ -19,10 +19,10 @@ var _ = require('underscore');
  *   - id   (optional) - response would carry back id (copied from original msg)
  *   - ver  (optional) - defaults to "1.0"
  *   - cmd  (optional) - default command is 'pub(lish)' / broadcast in current channel
- *   - args (required) - arguments (positional or named) 
+ *   - args (required) - input arguments (positional or named) and result
  *   - src  (optional) - can it be populated by client-id?
  *   - dst  (optional) - defaults to current channel, could be a channel or list of channels
- *   - tags (optional) - on response - result values (positional or named) 
+ *   - tags (optional) - additional tags from server that needs to be passed
  *   - error - on response {'code': ERROR_CODE, message: 'error message(optional)'}, 
  *             args would carry the result error string
  *
@@ -33,8 +33,8 @@ var _ = require('underscore');
  * --> {"ver": "1.0", "cmd": "pub", "args": "Hi, there"}
  * 
  * error response:
- * <-- {"ver": "1.0", "error": {"code":-32600,"message":"Parse error"}}
- * <-- {"error": {"code":-32600},"args":"Unexpected end of input"}
+ * <-- {"ver": "1.0", "error": {"code":510,"message":"Parse error"}}
+ * <-- {"error": {"code":510},"args":"Unexpected end of input"}
  *
 */
 
@@ -104,7 +104,7 @@ JSONChat.prototype.dispatch = function(jsonBody) {
   _.each(commands, function(cmdObj) {
     var result = self._validate(cmdObj);
     if(!result) {
-      if(!_.has(cmdObj, _TAG_CMD || !_.has(cmdObj, _TAG_ID) || (_.has(cmdObj, _TAG_CMD) && cmdObj[_TAG_CMD]==_PUB_CMD))) {
+      if(!_.has(cmdObj, _TAG_CMD) || cmdObj[_TAG_CMD]==_PUB_CMD) {
         // - first handle all pub commands 
         //   those are notifications.
         //self._debug(true, 'Notification ' + JSON.stringify(cmdObj));
@@ -114,7 +114,7 @@ JSONChat.prototype.dispatch = function(jsonBody) {
         // invoke the function
         try {
           var res = self.commands[cmdObj[_TAG_CMD]].apply(null, cmdObj[_TAG_ARGS]);
-          result = self.result(cmdObj.id, res);
+          result = self.result(cmdObj.id, res, cmdObj[_TAG_CMD]);
         }
         catch(err) {
           result = self.error(ChatErrors.INTERNAL_ERROR, cmdObj.id, err);
@@ -133,10 +133,11 @@ JSONChat.prototype.dispatch = function(jsonBody) {
 };
 
 // return back the result object
-JSONChat.prototype.result = function(id, result) {
+JSONChat.prototype.result = function(id, result, cmd) {
   var res = { 
       args : result,
-      id: id 
+      id: id,
+      cmd: cmd
   };
   if(!this.minimal) {
       res[_TAG_VER] = this.version;
@@ -192,7 +193,7 @@ JSONChat.prototype._validate = function(cmdObj) {
     }
   }
   // - check for cmd absence
-  if(!_.has(cmdObj, _TAG_CMD)) {
+  if(!_.has(cmdObj, _TAG_CMD) || cmdObj[_TAG_CMD]==_PUB_CMD) {
     if(!_.has(cmdObj, _TAG_ARGS)) {
       return self.error(ChatErrors.INVALID_REQUEST, id, 'args missing');
     }
@@ -206,7 +207,7 @@ JSONChat.prototype._validate = function(cmdObj) {
   // - args checks
   var params=_getParamNames(self.commands[cmdObj[_TAG_CMD]]) || [];
   // - check params length
-  if(!_.has(cmdObj, _TAG_ARGS) && params && params.length) {
+  if(!_.has(cmdObj, _TAG_ARGS) && params && params.length>0) {
     return self.error(ChatErrors.INVALID_PARAMS, id, 'params expected:'+params);
   }
 
@@ -229,7 +230,7 @@ JSONChat.prototype._validate = function(cmdObj) {
     if(ptype=='object') {
       var requestValues = _.keys(cmdObj[_TAG_ARGS]);
       if(!handy.isArrayEqual(params, requestValues)) {
-        return self.error(ChatErrors.INVALID_PARAMS, cmdObj.id, 'params expected:'+params);
+        return self.error(ChatErrors.INVALID_PARAMS, cmdObj.id, 'params mismatch:'+params);
       }
       // lets convert the params to array 
       // in the order expected
