@@ -2,7 +2,7 @@
   "name": "jsonchatlib",
   "description": "json chat library",
   "homepage": "https://github.com/hapim/jsonchatlib",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": "el aras <openmason@gmail.com>",
   "dependencies": {
     "handy"     : ">= 0.0.13",
