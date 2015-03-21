@@ -75,7 +75,8 @@ var JSONChat = function(module, minimal, debug) {
 
 // main dispatcher for processing json-chat
 // requests
-JSONChat.prototype.dispatch = function(jsonBody) {
+JSONChat.prototype.dispatch = function(packet) {
+  var jsonBody = packet.payload;
   var self=this;
   self._debug(true, jsonBody);
 
@@ -108,12 +109,15 @@ JSONChat.prototype.dispatch = function(jsonBody) {
         // - first handle all pub commands 
         //   those are notifications.
         //self._debug(true, 'Notification ' + JSON.stringify(cmdObj));
-	// - just leave them as they are
-	result = self.result(id, cmdObj[_TAG_ARGS]);
+      	// - just leave them as they are
+      	result = self.result(id, cmdObj[_TAG_ARGS]);
       } else {
         // invoke the function
         try {
-          var res = self.commands[cmdObj[_TAG_CMD]].apply(null, cmdObj[_TAG_ARGS]);
+          var cmdArgs = [];
+          cmdArgs.push(packet);
+          cmdArgs.push.apply(cmdArgs, cmdObj[_TAG_ARGS]);
+          var res = self.commands[cmdObj[_TAG_CMD]].apply(null, cmdArgs);
           result = self.result(cmdObj.id, res, cmdObj[_TAG_CMD]);
         }
         catch(err) {
