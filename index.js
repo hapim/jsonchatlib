@@ -227,12 +227,15 @@ JSONChat.prototype._validate = function(cmdObj) {
     // sometimes it might be by design that less valus can be passed
 
     // check if array matches the arguments
-    if(ptype=='array' && cmdObj[_TAG_ARGS].length != params.length) {
+    if(ptype=='array' && cmdObj[_TAG_ARGS].length+1 != params.length) {
       return self.error(ChatErrors.INVALID_PARAMS, cmdObj.id, 'total params expected:'+params.length);
     }
     // check if the object has matching params
     if(ptype=='object') {
-      var requestValues = _.keys(cmdObj[_TAG_ARGS]);
+      var requestValues = [];
+      
+      requestValues.push("packet");
+      requestValues.push.apply(requestValues,_.keys(cmdObj[_TAG_ARGS]));
       if(!handy.isArrayEqual(params, requestValues)) {
         return self.error(ChatErrors.INVALID_PARAMS, cmdObj.id, 'params mismatch:'+params);
       }
