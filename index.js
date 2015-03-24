@@ -109,8 +109,8 @@ JSONChat.prototype.dispatch = function(packet) {
         // - first handle all pub commands 
         //   those are notifications.
         //self._debug(true, 'Notification ' + JSON.stringify(cmdObj));
-      	// - just leave them as they are
-      	result = self.result(id, cmdObj[_TAG_ARGS]);
+        // - just leave them as they are
+        result = self.result(id, cmdObj[_TAG_ARGS]);
       } else {
         // invoke the function
         try {
@@ -210,6 +210,10 @@ JSONChat.prototype._validate = function(cmdObj) {
   }
   // - args checks
   var params=_getParamNames(self.commands[cmdObj[_TAG_CMD]]) || [];
+  var packet_index = params.indexOf("packet");
+  if (packet_index > -1) {
+    params.splice(packet_index, 1);
+  }
   // - check params length
   if(!_.has(cmdObj, _TAG_ARGS) && params && params.length>0) {
     return self.error(ChatErrors.INVALID_PARAMS, id, 'params expected:'+params);
@@ -227,14 +231,12 @@ JSONChat.prototype._validate = function(cmdObj) {
     // sometimes it might be by design that less valus can be passed
 
     // check if array matches the arguments
-    if(ptype=='array' && cmdObj[_TAG_ARGS].length+1 != params.length) {
+    if(ptype=='array' && cmdObj[_TAG_ARGS].length != params.length) {
       return self.error(ChatErrors.INVALID_PARAMS, cmdObj.id, 'total params expected:'+params.length);
     }
     // check if the object has matching params
     if(ptype=='object') {
       var requestValues = [];
-      
-      requestValues.push("packet");
       requestValues.push.apply(requestValues,_.keys(cmdObj[_TAG_ARGS]));
       if(!handy.isArrayEqual(params, requestValues)) {
         return self.error(ChatErrors.INVALID_PARAMS, cmdObj.id, 'params mismatch:'+params);
